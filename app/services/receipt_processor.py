@@ -57,7 +57,6 @@ def process_receipt(receipt_id: int, db: Session, expected_version: int) -> None
         det = _norm_currency(parsed.currency)
         receipt.detected_currency = det
 
-        # если пользователь не задавал вручную — используем распознанную
         if (receipt.currency or "").upper() == "AUTO":
             receipt.currency = det or "USD"
 
@@ -67,7 +66,6 @@ def process_receipt(receipt_id: int, db: Session, expected_version: int) -> None
         receipt.merchant = parsed.merchant
         receipt.purchase_datetime = parsed.purchase_datetime
         receipt.total = parsed.total
-        # receipt.currency = parsed.currency
         receipt.raw_llm_json = parsed.model_dump_json(indent=2, ensure_ascii=False)
 
         db.query(ReceiptItem).filter(ReceiptItem.receipt_id == receipt.id).delete()

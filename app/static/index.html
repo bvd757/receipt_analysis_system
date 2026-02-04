@@ -262,7 +262,7 @@
     try {
       const form = new FormData();
       form.append("file", f);
-      form.append("currency", cur);   // <-- ВОТ ЭТО НОВОЕ
+      form.append("currency", cur);
 
       const data = await api("/receipts/upload", { method: "POST", body: form });
       setMsg("receiptMsg", `Uploaded receipt id=${data.id}, status=${data.status}`, "ok");

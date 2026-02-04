@@ -11,7 +11,6 @@ POLL_SECONDS = int(os.getenv("WORKER_POLL_SECONDS", "2"))
 WORKER_ID = os.getenv("WORKER_ID", "worker-1")
 MAX_ATTEMPTS = int(os.getenv("TASK_MAX_ATTEMPTS", "3"))
 
-# через сколько секунд считаем "processing" задачу зависшей
 LOCK_TIMEOUT_SECONDS = int(os.getenv("TASK_LOCK_TIMEOUT_SECONDS", "180"))
 
 
@@ -76,7 +75,7 @@ def mark_failed(db, task_id: int, attempts: int, err: str):
         db.commit()
         return
 
-    delay_minutes = 2 ** (attempts - 1)  # 1,2,4...
+    delay_minutes = 2 ** (attempts - 1)
     run_after = now + timedelta(minutes=delay_minutes)
 
     db.execute(
@@ -113,30 +112,25 @@ def main():
         try:
             now = datetime.now(timezone.utc)
 
-            # 0) requeue stale "processing" tasks
             stale_before = now - timedelta(seconds=LOCK_TIMEOUT_SECONDS)
             db.execute(REQUEUE_STALE_SQL, {"now": now, "stale_before": stale_before})
             db.commit()
 
-            # 1) claim one task
             result = db.execute(CLAIM_SQL, {"now": now, "worker": WORKER_ID})
             row = result.mappings().first()
-            result.close()  # <-- важно для sqlite + RETURNING
+            result.close()
             db.commit()
 
             if not row:
                 time.sleep(POLL_SECONDS)
                 continue
 
-            # Всё после claim — под защитой, чтобы не оставлять processing навсегда
             try:
                 task_id = int(row["id"])
                 receipt_id = int(row["receipt_id"])
                 receipt_version = int(row["receipt_version"])
                 attempts = int(row["attempts"])
             except Exception as e:
-                # если даже распарсить row не смогли — переводим задачу в error
-                # (task_id может быть неизвестен, но обычно есть)
                 try:
                     task_id = int(row.get("id", 0)) if row else 0
                 except Exception:
@@ -146,13 +140,10 @@ def main():
                 continue
 
             try:
-                # 2) обновим receipt.status сразу, чтобы UI не висел на queued
                 set_receipt_processing(db, receipt_id)
 
-                # 3) обработка (OCR + structuring)
                 process_receipt(receipt_id, db, expected_version=receipt_version)
 
-                # 4) done
                 mark_done(db, task_id)
                 print(f"[worker] task={task_id} receipt={receipt_id} done")
 

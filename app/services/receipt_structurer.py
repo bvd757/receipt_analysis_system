@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from openai import OpenAI
 from pydantic import BaseModel, Field, conlist
 
 from app.core.config import settings
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import field_validator
 
 
@@ -63,7 +62,6 @@ class ParsedReceipt(BaseModel):
             return "OTHER"
         s = str(v).strip().upper()
 
-        # немного синонимов (достаточно)
         if s in {"CAFE", "CAFÉ", "COFFEE", "COFFEESHOP", "BAR"} or "КАФ" in s or "КОФ" in s:
             return "CAFE"
         if s in {"RESTAURANT", "DINER"} or "РЕСТ" in s:

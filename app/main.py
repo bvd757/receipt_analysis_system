@@ -12,7 +12,6 @@ app.include_router(auth_router)
 app.include_router(receipts_router)
 app.include_router(chat_router)
 
-# static (optional; useful if you add css/js later)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/", include_in_schema=False)

@@ -8,12 +8,6 @@ from pathlib import Path
 
 
 def run_curl(args_list: list[str]) -> str:
-    """
-    Запускает curl и возвращает stdout.
-    Если curl завершился с ошибкой (returncode != 0) — печатает stdout/stderr и падает.
-    Важно: по умолчанию curl НЕ падает на HTTP 4xx/5xx без --fail.
-    """
-    # На Windows лучше "curl.exe", чтобы не подхватить алиас PowerShell.
     curl_bin = "curl.exe" if os.name == "nt" else "curl"
 
     cmd = [curl_bin, "-sS"] + args_list
@@ -154,7 +148,6 @@ def poll_until_finished(
         last = r
         status = r.get("status")
 
-        # компактный вывод полезных полей
         merchant = r.get("merchant")
         total = r.get("total")
         currency = r.get("currency")
@@ -180,7 +173,6 @@ def poll_until_finished(
                     f"locked_by={task.get('locked_by')}"
                 )
             else:
-                # endpoint может вернуть task=None
                 rv = t.get("receipt_version") if isinstance(t, dict) else None
                 print(f"       task=None receipt_version={rv}")
 
@@ -206,7 +198,6 @@ def main():
     ap.add_argument("--interval", type=float, default=2.0, help="Polling interval seconds")
     ap.add_argument("--show-task", action="store_true", help="Also call /receipts/{id}/task during polling")
 
-    # НОВОЕ: сколько раз делать reprocess после первого done
     ap.add_argument("--reprocess-times", type=int, default=1, help="How many times to call /reprocess after first done (0 disables)")
 
     args = ap.parse_args()
@@ -220,16 +211,13 @@ def main():
     receipt = upload_receipt(args.base_url, token, args.image)
     receipt_id = int(receipt["id"])
 
-    # 1) дождаться первичной обработки
     r1 = poll_until_finished(args.base_url, token, receipt_id, args.timeout, args.interval, args.show_task)
 
-    # 2) reprocess N раз
     for i in range(max(0, args.reprocess_times)):
         print(f"\n== REPROCESS #{i+1}/{args.reprocess_times} ==")
         reprocess_receipt(args.base_url, token, receipt_id)
         rN = poll_until_finished(args.base_url, token, receipt_id, args.timeout, args.interval, args.show_task)
 
-        # можно дополнительно проверить, что после reprocess поля появились снова
         if rN.get("status") == "done":
             print("[reprocess] done. extracted fields present:",
                   "merchant" if rN.get("merchant") else "merchant=None", "|",

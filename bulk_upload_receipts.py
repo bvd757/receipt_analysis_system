@@ -13,7 +13,6 @@ IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff"}
 def register(base_url: str, username: str, password: str) -> None:
     url = f"{base_url}/auth/register"
     r = requests.post(url, json={"username": username, "password": password}, timeout=20)
-    # 200/201 ok, 400 "already exists" тоже ок
     if r.status_code in (200, 201):
         return
     if r.status_code == 400 and "already exists" in r.text.lower():
@@ -38,11 +37,9 @@ def upload_receipt(base_url: str, token: str, file_path: Path, currency: str = "
     url = f"{base_url}/receipts/upload"
     headers = {"Authorization": f"Bearer {token}"}
 
-    # определить mime по расширению
     mime, _ = mimetypes.guess_type(str(file_path))
     mime = (mime or "image/jpeg").lower()
 
-    # небольшая нормализация (на всякий случай)
     ext = file_path.suffix.lower()
     if ext in (".jpg", ".jpeg"):
         mime = "image/jpeg"
@@ -52,8 +49,8 @@ def upload_receipt(base_url: str, token: str, file_path: Path, currency: str = "
         mime = "image/webp"
 
     with file_path.open("rb") as f:
-        files = {"file": (file_path.name, f, mime)}  # <-- ВАЖНО: третий элемент mime
-        data = {"currency": currency}                # Form field
+        files = {"file": (file_path.name, f, mime)}
+        data = {"currency": currency}
         r = requests.post(url, headers=headers, files=files, data=data, timeout=60)
 
     if r.status_code not in (200, 201):

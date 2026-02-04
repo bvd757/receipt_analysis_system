@@ -13,7 +13,6 @@ class SQLSandboxError(ValueError):
 _UID_TOKEN = "__bind_uid__"
 _MAX_LIMIT = 200
 
-# грубая страховка на случай, если парсер что-то пропустит
 _DANGEROUS_SUBSTRINGS = {
     "sqlite_master",
     "sqlite_temp_master",
@@ -119,8 +118,6 @@ def _cte_names(stmt: exp.Expression) -> set[str]:
 
 
 def _reject_forbidden_nodes(stmt: exp.Expression) -> None:
-    # В разных версиях sqlglot набор expression-классов отличается.
-    # Поэтому берём их через getattr и проверяем только существующие.
     forbidden_names = [
         "Insert",
         "Update",
@@ -128,9 +125,9 @@ def _reject_forbidden_nodes(stmt: exp.Expression) -> None:
         "Create",
         "Drop",
         "Alter",
-        "Truncate",      # может отсутствовать
-        "Command",       # может отсутствовать/меняться
-        "Transaction",   # может отсутствовать/меняться
+        "Truncate",
+        "Command",
+        "Transaction",
     ]
 
     for name in forbidden_names:
@@ -149,22 +146,19 @@ def _validate_tables(stmt: exp.Expression, allowed_tables: set[str]) -> None:
             continue
         if name in _DANGEROUS_SUBSTRINGS:
             raise SQLSandboxError("Access to system tables/pragma is not allowed")
-        # CTE names тоже приходят как Table — это ок
         if name not in allowed_tables:
             raise SQLSandboxError(f"Table '{name}' is not allowed")
 
 
 def _find_receipts_alias(stmt: exp.Expression) -> str | None:
-    # берем первый встреченный receipts; этого достаточно для MVP
     for t in stmt.find_all(exp.Table):
         if (t.name or "").lower() == "receipts":
-            alias = t.alias_or_name  # alias if present else table name
+            alias = t.alias_or_name
             return alias
     return None
 
 
 def _enforce_user_filter(sel: exp.Select, receipts_alias: str) -> None:
-    # alias.user_id = :uid (через уникальный токен, потом заменим на :uid)
     cond = exp.EQ(
         this=exp.column("user_id", table=receipts_alias),
         expression=exp.Identifier(this=_UID_TOKEN),
@@ -180,7 +174,6 @@ def _enforce_user_filter(sel: exp.Select, receipts_alias: str) -> None:
 def _enforce_limit(sel: exp.Select, limit: int) -> None:
     limit = int(limit)
 
-    # sqlglot менял имена аргументов в разных версиях, поэтому ставим лимит "адаптивно"
     limit_node = exp.Limit()
 
     if "expression" in exp.Limit.arg_types:
@@ -188,8 +181,7 @@ def _enforce_limit(sel: exp.Select, limit: int) -> None:
     elif "this" in exp.Limit.arg_types:
         limit_node.set("this", exp.Literal.number(limit))
     else:
-        # fallback: вытащим корректный LIMIT из распарсенного примера
         tmp = sqlglot.parse_one(f"SELECT 1 LIMIT {limit}", read="sqlite")
-        limit_node = tmp.args.get("limit")  # type: ignore
+        limit_node = tmp.args.get("limit")
 
     sel.set("limit", limit_node)

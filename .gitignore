@@ -30,3 +30,4 @@ app/uploads/
 *.log
 
 *.ipynb
+data_for_test/
