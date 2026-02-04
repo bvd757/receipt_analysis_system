@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Receipt Analysis System</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin: 0; background:#f6f7fb; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 12px; }
+    .card { background:#fff; border:1px solid #e6e8ef; border-radius: 10px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+    h2 { margin: 0 0 8px; font-size: 16px; }
+    label { display:block; font-size: 12px; color:#444; margin-top: 8px; }
+    input, button, textarea { width: 100%; box-sizing: border-box; padding: 8px; margin-top: 6px; border:1px solid #d9dce7; border-radius: 8px; }
+    button { cursor:pointer; background:#1f6feb; border-color:#1f6feb; color:#fff; font-weight:600; }
+    button.secondary { background:#fff; color:#111; border-color:#d9dce7; }
+    button.danger { background:#d1242f; border-color:#d1242f; }
+    .row { display:flex; gap:8px; }
+    .row > * { flex:1; }
+    .muted { color:#666; font-size:12px; }
+    .err { color:#b00020; font-size: 12px; white-space: pre-wrap; }
+    .ok { color:#0a7a2f; font-size: 12px; white-space: pre-wrap; }
+    table { width:100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom:1px solid #eee; padding: 6px; text-align:left; vertical-align: top; }
+    th { background:#fafbff; position: sticky; top:0; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; border:1px solid #e6e8ef; }
+    .pill.done { background:#ecfff1; border-color:#bfe8c8; }
+    .pill.processing, .pill.queued { background:#fff7e6; border-color:#ffd27a; }
+    .pill.error { background:#ffecec; border-color:#ffb3b3; }
+    .small { font-size: 12px; }
+    .sql { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono"; font-size: 11px; background:#0b1020; color:#d6ddff; padding:8px; border-radius:8px; overflow:auto; }
+    .tablewrap { max-height: 260px; overflow:auto; border:1px solid #eee; border-radius: 8px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1 style="margin:0 0 12px;font-size:18px;">Receipt Analysis System</h1>
+
+  <div class="grid">
+    <!-- Left column -->
+    <div class="card">
+      <h2>Auth</h2>
+
+      <div id="authStatus" class="muted">Not logged in</div>
+      <div class="row" style="margin-top:8px;">
+        <button class="secondary" id="btnLogout" onclick="logout()" style="display:none;">Logout</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0;" />
+
+      <h2 class="small">Register</h2>
+      <label>Username</label>
+      <input id="regUser" placeholder="boris" />
+      <label>Password</label>
+      <input id="regPass" type="password" placeholder="secret123" />
+      <button onclick="register()">Register</button>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0;" />
+
+      <h2 class="small">Login</h2>
+      <label>Username</label>
+      <input id="logUser" placeholder="boris" />
+      <label>Password</label>
+      <input id="logPass" type="password" placeholder="secret123" />
+      <button onclick="login()">Login</button>
+
+      <div id="authMsg" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- Right column -->
+    <div class="card">
+      <h2>Receipts</h2>
+
+      <div class="row">
+        <div>
+          <label>Upload receipt (image)</label>
+          <input id="fileInput" type="file" accept="image/*" />
+        </div>
+
+        <div>
+          <label>Currency</label>
+          <select id="currencySel">
+            <option value="AUTO" selected>AUTO</option>
+            <option value="USD">USD</option>
+            <option value="EUR">EUR</option>
+            <option value="CHF">CHF</option>
+            <option value="RUB">RUB</option>
+          </select>
+        </div>
+
+        <div style="align-self:end;">
+          <button onclick="uploadReceipt()">Upload</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:8px;">
+        <button class="secondary" onclick="refreshReceipts()">Refresh list</button>
+      </div>
+
+      <div id="receiptMsg" style="margin-top:8px;"></div>
+
+      <div style="margin-top:10px;">
+        <div class="tablewrap">
+          <table id="receiptsTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Status</th>
+                <th>Merchant</th>
+                <th>Total</th>
+                <th>Uploaded</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="receiptDetails" style="margin-top:12px;"></div>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0;" />
+
+      <h2>Chat</h2>
+      <label>Question</label>
+      <textarea id="chatQ" rows="3" placeholder="How much did I spend last month?"></textarea>
+      <div class="row">
+        <button onclick="askChat()">Ask</button>
+        <button class="secondary" onclick="clearChat()">Clear</button>
+      </div>
+
+      <div id="chatMsg" style="margin-top:10px;"></div>
+      <div id="chatAnswer" style="margin-top:10px;"></div>
+      <div id="chatSQL" style="margin-top:10px;"></div>
+      <div id="chatTable" style="margin-top:10px;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const tokenKey = "receipt_token";
+
+  function getToken() {
+    return localStorage.getItem(tokenKey) || "";
+  }
+  function setToken(t) {
+    if (t) localStorage.setItem(tokenKey, t);
+    else localStorage.removeItem(tokenKey);
+    renderAuth();
+  }
+
+  function syncCurrencySelectFromReceipt(r) {
+    const sel = document.getElementById("currencySel");
+    if (!sel) return;
+
+    const cur = (r && r.currency ? r.currency : "AUTO").toUpperCase();
+    const allowed = ["AUTO", "USD", "EUR", "CHF", "RUB"];
+    sel.value = allowed.includes(cur) ? cur : "AUTO";
+  }
+
+  function setMsg(elId, text, kind="muted") {
+    const el = document.getElementById(elId);
+    if (!text) { el.innerHTML = ""; return; }
+    const cls = kind === "err" ? "err" : (kind === "ok" ? "ok" : "muted");
+    el.innerHTML = `<div class="${cls}">${escapeHtml(text)}</div>`;
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;");
+  }
+
+  async function api(path, opts = {}) {
+    const headers = opts.headers || {};
+    const t = getToken();
+    if (t) headers["Authorization"] = "Bearer " + t;
+    opts.headers = headers;
+
+    const res = await fetch(path, opts);
+    const text = await res.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch { data = text; }
+    if (!res.ok) {
+      const detail = (data && data.detail) ? data.detail : text;
+      throw new Error(detail);
+    }
+    return data;
+  }
+
+  function renderAuth() {
+    const t = getToken();
+    const status = document.getElementById("authStatus");
+    const btn = document.getElementById("btnLogout");
+    if (t) {
+      status.textContent = "Logged in (token stored in localStorage)";
+      btn.style.display = "block";
+    } else {
+      status.textContent = "Not logged in";
+      btn.style.display = "none";
+    }
+  }
+
+  async function register() {
+    setMsg("authMsg", "");
+    const username = document.getElementById("regUser").value.trim();
+    const password = document.getElementById("regPass").value.trim();
+    if (!username || !password) return setMsg("authMsg", "username/password required", "err");
+    if (username.length < 3) return setMsg("authMsg", "username must be at least 3 characters", "err");
+    if (password.length < 6) return setMsg("authMsg", "password must be at least 6 characters", "err");
+
+
+    try {
+      const data = await api("/auth/register", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({username, password})
+      });
+      setMsg("authMsg", "Registered: " + JSON.stringify(data), "ok");
+    } catch (e) {
+      setMsg("authMsg", String(e.message || e), "err");
+    }
+  }
+
+  async function login() {
+    setMsg("authMsg", "");
+    const username = document.getElementById("logUser").value.trim();
+    const password = document.getElementById("logPass").value.trim();
+    if (!username || !password) return setMsg("authMsg", "username/password required", "err");
+
+    try {
+      const body = new URLSearchParams({username, password});
+      const data = await api("/auth/login", {
+        method: "POST",
+        headers: {"Content-Type":"application/x-www-form-urlencoded"},
+        body
+      });
+      setToken(data.access_token);
+      setMsg("authMsg", "Logged in", "ok");
+      await refreshReceipts();
+    } catch (e) {
+      setMsg("authMsg", String(e.message || e), "err");
+    }
+  }
+
+  function logout() {
+    setToken("");
+    setMsg("authMsg", "Logged out", "ok");
+    document.querySelector("#receiptsTable tbody").innerHTML = "";
+    document.getElementById("receiptDetails").innerHTML = "";
+    clearChat();
+  }
+
+  async function uploadReceipt() {
+    setMsg("receiptMsg", "");
+    const t = getToken();
+    if (!t) return setMsg("receiptMsg", "Login first", "err");
+
+    const f = document.getElementById("fileInput").files[0];
+    if (!f) return setMsg("receiptMsg", "Choose an image file", "err");
+
+    const cur = (document.getElementById("currencySel").value || "USD").toUpperCase();
+
+    try {
+      const form = new FormData();
+      form.append("file", f);
+      form.append("currency", cur);   // <-- ВОТ ЭТО НОВОЕ
+
+      const data = await api("/receipts/upload", { method: "POST", body: form });
+      setMsg("receiptMsg", `Uploaded receipt id=${data.id}, status=${data.status}`, "ok");
+      await refreshReceipts();
+      pollReceipt(data.id, 20, 1500);
+    } catch (e) {
+      setMsg("receiptMsg", String(e.message || e), "err");
+    }
+  }
+
+  async function refreshReceipts() {
+    setMsg("receiptMsg", "");
+    const t = getToken();
+    if (!t) return;
+
+    try {
+      const data = await api("/receipts?limit=50&offset=0");
+      renderReceiptsTable(data || []);
+    } catch (e) {
+      setMsg("receiptMsg", String(e.message || e), "err");
+    }
+  }
+
+  function pill(status) {
+    const s = (status || "").toLowerCase();
+    const cls = (s === "done") ? "done" : (s === "error" ? "error" : (s === "processing" ? "processing" : "queued"));
+    return `<span class="pill ${cls}">${escapeHtml(status || "")}</span>`;
+  }
+
+  function renderReceiptsTable(items) {
+    const tbody = document.querySelector("#receiptsTable tbody");
+    tbody.innerHTML = "";
+
+    for (const r of items) {
+      const tr = document.createElement("tr");
+      const total = (r.total == null) ? "" : `${r.total} ${r.currency || ""}`;
+      tr.innerHTML = `
+        <td>${r.id}</td>
+        <td>${pill(r.status)}</td>
+        <td>${escapeHtml(r.merchant || "")}</td>
+        <td>${escapeHtml(total)}</td>
+        <td>${escapeHtml(r.uploaded_at || "")}</td>
+        <td>
+          <button class="secondary" onclick="openReceipt(${r.id})">Open</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function openReceipt(id) {
+    setMsg("receiptMsg", "");
+    try {
+      const r = await api(`/receipts/${id}`);
+      renderReceiptDetails(r);
+      syncCurrencySelectFromReceipt(r);
+    } catch (e) {
+      setMsg("receiptMsg", String(e.message || e), "err");
+    }
+  }
+
+  function renderReceiptDetails(r) {
+    const el = document.getElementById("receiptDetails");
+
+    // ---- sync global currency selector to this receipt (user can still change it manually) ----
+    const cur = String(r.currency || "USD").toUpperCase();
+    const sel = document.getElementById("currencySel");
+    if (sel && Array.from(sel.options || []).some(o => o.value === cur)) {
+      sel.value = cur;
+    }
+
+    const det = r.detected_currency ? String(r.detected_currency).toUpperCase() : "";
+    const totalNative = (r.total == null) ? "" : `${r.total} ${cur}`;
+    const totalUsd = (r.total_usd == null) ? "" : `${r.total_usd} USD`;
+    const total =
+      (totalNative && totalUsd && cur !== "USD")
+        ? `${totalNative} (~${totalUsd})`
+        : (totalNative || totalUsd || "");
+
+    const currencyInfo = det ? `currency: ${cur} | detected: ${det}` : `currency: ${cur}`;
+
+    const items = (r.items || []);
+    const showLineUsd = items.some(it => it.line_total_usd != null);
+
+    el.innerHTML = `
+      <div class="card" style="padding:10px;background:#fafbff;">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+          <div>
+            <div><b>Receipt #${r.id}</b> ${pill(r.status)}</div>
+            <div class="muted">
+              merchant: ${escapeHtml(r.merchant || "")}
+              | total: ${escapeHtml(total)}
+              | date: ${escapeHtml(r.purchase_datetime || "")}
+              | ${escapeHtml(currencyInfo)}
+            </div>
+            <div class="muted" style="margin-top:4px;">
+              Tip: change currency in the selector above and press Reprocess if needed.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="secondary" onclick="pollReceipt(${r.id}, 20, 1500)">Poll</button>
+            <button class="danger" onclick="reprocess(${r.id})">Reprocess</button>
+          </div>
+        </div>
+
+        <div style="margin-top:8px;">
+          <div class="muted">items: ${items.length}</div>
+          <div class="tablewrap" style="max-height:160px;margin-top:6px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th><th>Qty</th><th>Unit</th><th>Line</th>
+                  ${showLineUsd ? "<th>Line USD</th>" : ""}
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map(it => `
+                  <tr>
+                    <td>${escapeHtml(it.name || "")}</td>
+                    <td>${it.quantity ?? ""}</td>
+                    <td>${it.unit_price ?? ""}</td>
+                    <td>${it.line_total ?? ""}</td>
+                    ${showLineUsd ? `<td>${it.line_total_usd ?? ""}</td>` : ""}
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <details style="margin-top:8px;">
+          <summary class="muted">raw_ocr_text</summary>
+          <pre style="white-space:pre-wrap;font-size:11px;">${escapeHtml(r.raw_ocr_text || "")}</pre>
+        </details>
+
+        <details style="margin-top:8px;">
+          <summary class="muted">raw_llm_json</summary>
+          <pre style="white-space:pre-wrap;font-size:11px;">${escapeHtml(r.raw_llm_json || "")}</pre>
+        </details>
+
+        ${r.error ? `<div class="err">error: ${escapeHtml(r.error)}</div>` : ""}
+      </div>
+    `;
+    syncCurrencySelectFromReceipt(r);
+  }
+
+  async function pollReceipt(id, tries=20, delayMs=1500) {
+    for (let i=0; i<tries; i++) {
+      try {
+        const r = await api(`/receipts/${id}`);
+        renderReceiptDetails(r);
+        await refreshReceipts();
+        if (r.status === "done" || r.status === "error") return;
+      } catch {}
+      await new Promise(res => setTimeout(res, delayMs));
+    }
+  }
+
+  async function reprocess(id) {
+    setMsg("receiptMsg", "");
+    try {
+      const cur = document.getElementById("currencySel")?.value || "AUTO";
+      const r = await api(`/receipts/${id}/reprocess?currency=${encodeURIComponent(cur)}`, { method: "POST" });
+
+      setMsg("receiptMsg", `Reprocess queued for receipt ${id} (currency=${cur})`, "ok");
+      renderReceiptDetails(r);
+      await refreshReceipts();
+      pollReceipt(id, 30, 1500);
+    } catch (e) {
+      setMsg("receiptMsg", String(e.message || e), "err");
+    }
+  }
+
+  function clearChat() {
+    document.getElementById("chatQ").value = "";
+    document.getElementById("chatMsg").innerHTML = "";
+    document.getElementById("chatAnswer").innerHTML = "";
+    document.getElementById("chatSQL").innerHTML = "";
+    document.getElementById("chatTable").innerHTML = "";
+  }
+
+  async function askChat() {
+    setMsg("chatMsg", "");
+    const t = getToken();
+    if (!t) return setMsg("chatMsg", "Login first", "err");
+
+    const question = document.getElementById("chatQ").value.trim();
+    if (!question) return setMsg("chatMsg", "Question required", "err");
+
+    try {
+      const data = await api("/chat", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({question})
+      });
+
+      document.getElementById("chatAnswer").innerHTML =
+        `<div class="card" style="padding:10px;background:#fff;">
+           <div><b>Answer</b></div>
+           <div style="margin-top:6px;">${escapeHtml(data.answer || "")}</div>
+         </div>`;
+
+      if (data.sql) {
+        document.getElementById("chatSQL").innerHTML =
+          `<div class="card" style="padding:10px;background:#fff;">
+             <div class="muted">source: ${escapeHtml(data.source || "")}</div>
+             <div style="margin-top:6px;" class="sql">${escapeHtml(data.sql)}</div>
+           </div>`;
+      } else {
+        document.getElementById("chatSQL").innerHTML = "";
+      }
+
+      renderChatTable(data.table);
+
+    } catch (e) {
+      setMsg("chatMsg", String(e.message || e), "err");
+    }
+  }
+
+  function renderChatTable(table) {
+    const el = document.getElementById("chatTable");
+    if (!table || !table.columns || !table.rows) { el.innerHTML = ""; return; }
+
+    const cols = table.columns;
+    const rows = table.rows;
+
+    el.innerHTML = `
+      <div class="card" style="padding:10px;background:#fff;">
+        <div><b>Table</b></div>
+        <div class="tablewrap" style="margin-top:8px;">
+          <table>
+            <thead>
+              <tr>${cols.map(c => `<th>${escapeHtml(String(c))}</th>`).join("")}</tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `<tr>${r.map(v => `<td>${escapeHtml(String(v ?? ""))}</td>`).join("")}</tr>`).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // init
+  renderAuth();
+  if (getToken()) refreshReceipts();
+</script>
+</body>
+</html>

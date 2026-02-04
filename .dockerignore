@@ -1,0 +1,12 @@
+.receipt_venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.db
+app/uploads/*
+app/data/*
+.env
+.git
+.vscode
+*.log
